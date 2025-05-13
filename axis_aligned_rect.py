@@ -52,81 +52,13 @@ class RectangleLearner:
         return sum_hx / sum_cx
 
 
+# AdaBoost/bootstrap aggregating learner for axis-aligned rectangles
 class AdaboostRectangleLearner:
-    # Generate n data points with an optional noise rate
-    def generate_data(self, n=10000, noise_rate=0):
-        data = []
-        # Create concept rect for the training data to be generated
-        concept_rectangle = self.generate_concept_rectangle()
-        noise_idxs = set(random.sample([i for i in range(n)], k=int(n*noise_rate)))
-        for i in range(n):
-            # Generate random points between 0 and 1
-            x, y = random.uniform(0, 1), random.uniform(0, 1)
-            # Label data based on the concept's position
-            true_label = self.classify(concept_rectangle, x, y)
-            # Flip the label to incorporate noise (false positive or false negative)
-            data.append((x, y, true_label if i not in noise_idxs else 1 - true_label))
-        
-        return data, concept_rectangle  # Return the training data and the concept rectangle
-
-    # Generate a concept rectangle
-    def generate_concept_rectangle(self):
-        return self.get_random_rectangle_ab(0.3, 0.6)
-
-    # Generate a hypothesis rectangle randomly ith E[A] = 0.5 - d
-    def get_random_hypothesis(self, d = 0.25):
-        # E[A] = 0.5 - d = E[w] * E[h]
-        # E[w] = E[h] = √(0.5 - d)
-        d = max(0, min(d, 0.5)) # 0 < d < 0.5
-        if d > 0.25:
-            x = 2 * ((0.5 - d) ** 0.5)
-            return self.get_random_rectangle_ab(0.0, x)
-        else:
-            x = 2 * ((0.5 - d) ** 0.5) - 1
-            return self.get_random_rectangle_ab(x, 1.0)
-        
-    # Generate a hypothesis rectangle that has a high probability of being a weak learner
-    def get_weak_learner2(self, positives, d = 0.25):
-        # E[A] = 0.5 - d = E[w] * E[h]
-        # E[w] = E[h] = √(0.5 - d)
-        num_samples = 5
-        samples = random.choices(positives, k=num_samples)
-        xs = [p[0] for p in samples]
-        ys = [p[1] for p in samples]
-        return (min(xs), max(xs), min(ys), max(ys))
-        
-    # Generate a skinny hypothesis rectangle
-    def get_skinny_learner(self, d = 0):
-        w = random.uniform(0.0, 0.999)
-        p = random.uniform(0.0, 1 - w)
-        # print(w, p)
-        if random.random() < 0.5:
-            return (p, p + w, 0, 1)
-        else:
-            return (0, 1, p, p + w)
-    
-    # Generate a random rectangle of E[A] = 1/9
-    def get_random_rectangle(self):
-        # Sample points from space
-        xs = [random.random() for _ in range(2)]
-        ys = [random.random() for _ in range(2)]
-        # Build rectangle by tightest fit
-        return (min(xs), max(xs), min(ys), max(ys))
-    
-    # Generate a random rectangle w/ side lengths distributed over (a, b)
-    def get_random_rectangle_ab(self, a, b):
-        w = random.uniform(a, b)
-        h = random.uniform(a, b)
-        x1, y1 = random.uniform(0.0, 1.0 - w), random.uniform(0.0, 1.0 - h)
-        # Rectangle of form (x1, x2, y1, y2)
-        return (x1, x1 + w, y1, y1 + h)
-
     # --- AdaBoost :) ---
     def adaboost(self, data, num_rounds=1000, d = 0.005):
         n = len(data)
         weights = [1/n] * n
         classifiers = []
-        positives = [(x, y, label) for (x, y, label) in data if label == 1]
 
         for t in range(1, num_rounds + 1):
             # Form hypothesis rectangle as tightest fit around 5 randomly sampled positive data points
@@ -161,42 +93,20 @@ class AdaboostRectangleLearner:
         return self.select_best_ensemble_by_alpha(data, classifiers)
 
     # --- AdaBoost with bootstrap aggregating ---
-    def adaboost_with_bagging(self, data, weights=None, num_bags=1, num_rounds=1, d = 0.25):
+    def adaboost_with_bagging(self, data, num_bags=1, num_rounds=1, d = 0.25):
         voters = []
         n = len(data)
         bag_size = min(n, int(max(n * 0.1, min(n, 4 * n / num_bags)))) # subsample the data - use minimum 10% of training set
 
-        if weights is None:
-            weights = [1 / n for _ in range(n)]
-
         for _ in range(num_bags):
             # bootstrap dataset
-            data_bag = random.choices(data, weights=weights, k=bag_size)
+            data_bag = random.choices(data, k=bag_size)
             # perform adaboost to get a boosted ensemble
             ensemble = self.adaboost(data_bag, num_rounds=num_rounds, d=d)
             # add ensemble to voters
             voters.append(ensemble)
 
         return voters
-    
-    # Find the hypothesis reached by the boosted & bagged strong learner (purple)
-    def get_consensus_rectangle(self, voters):
-        n = len(voters)
-        resolution = 200
-        positive_points = [] * n
-
-        for i in range(resolution):
-            for j in range(resolution):
-                x = i / resolution
-                y = j / resolution
-                if self.boosted_bagged_predict(x, y, voters) == 1:
-                    positive_points.append((x, y))
-
-        if not positive_points:
-            return None
-            
-        xs, ys = zip(*positive_points)
-        return (min(xs), max(xs), min(ys), max(ys))
     
     # --- Find best ensemble greedily by assessing error ---
     def select_best_ensemble_by_alpha(self, data, classifiers, max_ensemble_size=1000):
@@ -233,6 +143,66 @@ class AdaboostRectangleLearner:
 
         # print(f"Ensemble Error: {current_error:.3f}")
         return best_ensemble
+
+    # Generate n data points with an optional noise rate
+    def generate_data(self, n=10000, noise_rate=0):
+        data = []
+        # Create concept rect for the training data to be generated
+        concept_rectangle = self.generate_concept_rectangle()
+        noise_idxs = set(random.sample([i for i in range(n)], k=int(n*noise_rate)))
+        for i in range(n):
+            # Generate random points between 0 and 1
+            x, y = random.uniform(0, 1), random.uniform(0, 1)
+            # Label data based on the concept's position
+            true_label = self.classify(concept_rectangle, x, y)
+            # Flip the label to incorporate noise (false positive or false negative)
+            data.append((x, y, true_label if i not in noise_idxs else 1 - true_label))
+        
+        return data, concept_rectangle  # Return the training data and the concept rectangle
+    
+    # --- Rectangle (4-tuple) helpers ---
+
+    def generate_concept_rectangle(self):
+        return self.get_random_rectangle_ab(0.3, 0.6)
+
+    # Generate a hypothesis rectangle randomly ith E[A] = 0.5 - d
+    def get_random_hypothesis(self, d = 0.25):
+        # E[A] = 0.5 - d = E[w] * E[h]
+        # E[w] = E[h] = √(0.5 - d)
+        d = max(0, min(d, 0.5)) # 0 < d < 0.5
+        if d > 0.25:
+            x = 2 * ((0.5 - d) ** 0.5)
+            return self.get_random_rectangle_ab(0.0, x)
+        else:
+            x = 2 * ((0.5 - d) ** 0.5) - 1
+            return self.get_random_rectangle_ab(x, 1.0)
+    
+    # Generate a random rectangle w/ side lengths distributed over (a, b)
+    def get_random_rectangle_ab(self, a, b):
+        w = random.uniform(a, b)
+        h = random.uniform(a, b)
+        x1, y1 = random.uniform(0.0, 1.0 - w), random.uniform(0.0, 1.0 - h)
+        # Rectangle of form (x1, x2, y1, y2)
+        return (x1, x1 + w, y1, y1 + h)
+    
+    # Find the hypothesis reached by the boosted & bagged strong learner (purple)
+    def get_consensus_rectangle(self, voters):
+        n = len(voters)
+        resolution = 200
+        positive_points = [] * n
+
+        for i in range(resolution):
+            for j in range(resolution):
+                x = i / resolution
+                y = j / resolution
+                if self.boosted_bagged_predict(x, y, voters) == 1:
+                    positive_points.append((x, y))
+
+        if not positive_points:
+            return None
+            
+        xs, ys = zip(*positive_points)
+        return (min(xs), max(xs), min(ys), max(ys))
 
     # --- Error helpers ---
 
@@ -340,7 +310,7 @@ if __name__ == "__main__":
     n = 1000000
     for i in range(n):
         concept_rectangle = learner.generate_concept_rectangle()
-        random_hypothesis = learner.get_random_rectangle()
+        random_hypothesis = learner.get_random_hypothesis()
         err_, ov_ = learner.true_error(concept_rectangle, random_hypothesis)
         err += err_
         ov += ov_
