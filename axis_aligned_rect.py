@@ -161,7 +161,7 @@ class AdaboostRectangleLearner:
         return self.select_best_ensemble_by_alpha(data, classifiers)
 
     # --- AdaBoost with bootstrap aggregating ---
-    def adaboost_with_bagging(self, data, weights=None, num_bags=1, num_rounds=1, d = 0.005):
+    def adaboost_with_bagging(self, data, weights=None, num_bags=1, num_rounds=1, d = 0.25):
         voters = []
         n = len(data)
         bag_size = min(n, int(max(n * 0.1, min(n, 4 * n / num_bags)))) # subsample the data - use minimum 10% of training set

@@ -3,12 +3,14 @@ import random
 from axis_aligned_rect import AdaboostRectangleLearner
 
 # Canvas settings
-CANVAS_WIDTH = 600
-CANVAS_HEIGHT = 600
+CANVAS_WIDTH = 640
+CANVAS_HEIGHT = 640
+CANVAS_WIDTH_ = 600
+CANVAS_HEIGHT_ = 600
 POINT_RADIUS = 1.5
 
 def to_canvas_coords(x, y):
-    return x * CANVAS_WIDTH, CANVAS_HEIGHT - y * CANVAS_HEIGHT
+    return x * CANVAS_WIDTH_ + 20, CANVAS_HEIGHT_ - y * CANVAS_HEIGHT_ + 20
 
 class AdaBoostVisualizer:
     def __init__(self, master):
@@ -24,10 +26,10 @@ class AdaBoostVisualizer:
 
         # --- Create three side-by-side sub-frames ---
         inputs_frame = tk.Frame(control_frame)
-        inputs_frame.pack(side='left', padx=20)
+        inputs_frame.pack(side='left', padx=20, pady=3, anchor='n')
 
         buttons_frame = tk.Frame(control_frame)
-        buttons_frame.pack(side='left', padx=20)
+        buttons_frame.pack(side='left', padx=10)
 
         outputs_frame = tk.Frame(control_frame)
         outputs_frame.pack(side='left', padx=20, anchor='n')
@@ -37,55 +39,51 @@ class AdaBoostVisualizer:
         self.dataset_noise_label.grid(row=0, column=0, sticky='e', pady=2)
 
         self.dataset_noise_entry = tk.Entry(inputs_frame, width=5)
-        self.dataset_noise_entry.insert(tk.END, str(0))
+        self.dataset_noise_entry.insert(tk.END, str(0.0))
         self.dataset_noise_entry.grid(row=0, column=1, sticky='w', pady=2)
 
         self.d_value_label = tk.Label(inputs_frame, text="d:", anchor='e')
         self.d_value_label.grid(row=1, column=0, sticky='e', pady=2)
 
-        self.d_value_entry = tk.Entry(inputs_frame, width=5)
-        self.d_value_entry.insert(tk.END, str(0.005))
-        self.d_value_entry.grid(row=1, column=1, sticky='w', pady=2)
-
         self.boosting_rounds_label = tk.Label(inputs_frame, text="# boosting rounds:", anchor='e')
-        self.boosting_rounds_label.grid(row=2, column=0, sticky='e', pady=2)
+        self.boosting_rounds_label.grid(row=1, column=0, sticky='e', pady=2)
 
         self.boosting_rounds_entry = tk.Entry(inputs_frame, width=5)
         self.boosting_rounds_entry.insert(tk.END, str(1))
-        self.boosting_rounds_entry.grid(row=2, column=1, sticky='w', pady=2)
+        self.boosting_rounds_entry.grid(row=1, column=1, sticky='w', pady=2)
 
         self.bagging_rounds_label = tk.Label(inputs_frame, text="# bagging rounds:", anchor='e')
-        self.bagging_rounds_label.grid(row=3, column=0, sticky='e', pady=2)
+        self.bagging_rounds_label.grid(row=2, column=0, sticky='e', pady=2)
 
         self.bagging_rounds_entry = tk.Entry(inputs_frame, width=5)
         self.bagging_rounds_entry.insert(tk.END, str(1))
-        self.bagging_rounds_entry.grid(row=3, column=1, sticky='w', pady=2)
+        self.bagging_rounds_entry.grid(row=2, column=1, sticky='w', pady=2)
 
         # --- Buttons section ---
-        self.generate_button = tk.Button(buttons_frame, width=14, text="Generate & Boost", command=self.generate)
+        self.generate_button = tk.Button(buttons_frame, width=18, text="Generate & Boost", command=self.generate)
         self.generate_button.pack(pady=2)
 
-        self.hide_concept_button = tk.Button(buttons_frame, width=14, text="Hide Concept", command=self.toggle_concept_rectangles)
+        self.hide_concept_button = tk.Button(buttons_frame, width=18, text="Hide Concept", command=self.toggle_concept_rectangles)
         self.hide_concept_button.pack(pady=2)
 
-        self.hide_hypothesis_button = tk.Button(buttons_frame, width=14, text="Hide Hypothesis", command=self.toggle_hypothesis_rectangles)
+        self.hide_hypothesis_button = tk.Button(buttons_frame, width=18, text="Hide Strong Hypothesis", command=self.toggle_hypothesis_rectangles)
         self.hide_hypothesis_button.pack(pady=2)
 
-        self.hide_weak_button = tk.Button(buttons_frame, width=14, text="Hide Weak Learners", command=self.toggle_weak_rectangles)
+        self.hide_weak_button = tk.Button(buttons_frame, width=18, text="Show Random Hypotheses", command=self.toggle_weak_rectangles)
         self.hide_weak_button.pack(pady=2)
 
         # --- Outputs section ---
         self.true_error = tk.Label(outputs_frame, text="True error: 0", anchor='w')
-        self.true_error.pack(anchor='w', pady=2)
+        self.true_error.pack(anchor='w')
 
         self.test_error = tk.Label(outputs_frame, text="Test error: 0", anchor='w')
-        self.test_error.pack(anchor='w', pady=2)
+        self.test_error.pack(anchor='w')
 
         self.t_positives = tk.Label(outputs_frame, text="True positives: 0", anchor='w')
-        self.t_positives.pack(anchor='w', pady=2)
+        self.t_positives.pack(anchor='w')
 
         self.f_positives = tk.Label(outputs_frame, text="False positives: 0", anchor='w')
-        self.f_positives.pack(anchor='w', pady=2)
+        self.f_positives.pack(anchor='w')
 
         self.concept_rectangle_visible = True  # Initially, rectangles are visible
         self.hypothesis_rectangle_visible = True  # Initially, rectangles are visible
@@ -116,9 +114,27 @@ class AdaBoostVisualizer:
         self.hypothesis_rectangle_visible = not self.hypothesis_rectangle_visible
         self.update()
 
+    def update_button_labels(self):
+        if self.concept_rectangle_visible:
+            self.hide_concept_button.config(text="Hide Concept")
+        else:
+            self.hide_concept_button.config(text="Show Concept")
+
+        if self.hypothesis_rectangle_visible:
+            self.hide_hypothesis_button.config(text="Hide Hypothesis")
+        else:
+            self.hide_hypothesis_button.config(text="Show Hypothesis")
+
+        if self.weak_rectangles_visible:
+            self.hide_weak_button.config(text="Hide Random Hypotheses")
+        else:
+            self.hide_weak_button.config(text="Show Random Hypotheses")
+
+
     def update(self):
+        self.update_button_labels()
         noise_rate = float(self.dataset_noise_entry.get())
-        d_value = float(self.d_value_entry.get())
+        # d_value = float(self.d_value_entry.get())
         bagging_rounds = int(self.bagging_rounds_entry.get())
         boosting_rounds = int(self.boosting_rounds_entry.get())
 
@@ -127,7 +143,7 @@ class AdaBoostVisualizer:
         if self.generating:
             # Generate new dataset
             self.data, self.concept_rect = self.learner.generate_data(noise_rate=noise_rate)  # Get the new dataset
-            self.bagged_classifiers = self.learner.adaboost_with_bagging(self.data, num_bags=bagging_rounds, num_rounds=boosting_rounds, d=d_value)  # Run AdaBoost on the data
+            self.bagged_classifiers = self.learner.adaboost_with_bagging(self.data, num_bags=bagging_rounds, num_rounds=boosting_rounds)  # Run AdaBoost on the data
         
             self.hypo_rectangle = self.learner.get_consensus_rectangle(self.bagged_classifiers)
             self.true_error.config(text=f"True error: {self.learner.true_error(self.concept_rect, self.hypo_rectangle)[0]:.3f}")
